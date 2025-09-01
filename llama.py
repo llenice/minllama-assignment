@@ -94,12 +94,12 @@ class Attention(nn.Module):
         attention matrix before applying it to the value tensor.
         '''
         _, _, seqlen, d_k = key.size()
-        scores = query @ key.transpose(2, 3) / math.sqrt(d_k)
+        attn = query @ key.transpose(2, 3) / math.sqrt(d_k)
 
         causal = torch.ones(seqlen, seqlen, device=attn.device, dtype=torch.bool).tril()
-        scores = scores.masked_fill(~causal, torch.finfo(attn.dtype).min)
+        attn = attn.masked_fill(~causal, torch.finfo(attn.dtype).min)
 
-        attn = F.softmax(scores, dim=-1)
+        attn = F.softmax(attn, dim=-1)
         attn = self.attn_dropout(attn)
         return attn @ value
 
