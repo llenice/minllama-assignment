@@ -69,29 +69,33 @@ def apply_rotary_emb(
 
     # 计算频率参数: ω_i = θ^(-2(i-1)/d)
     dim_indices = torch.arange(0, head_dim, 2, device=device) / head_dim
-    freqs = 1.0 / (theta ** dim_indices)
+    freqs = 1.0 / (theta ** dim_indices) # (d/2,)
 
     # 生成位置索引: 0, 1, ..., seqlen-1
-    positions = torch.arange(0, seqlen, 1, device = device) # position : m
+    positions = torch.arange(0, seqlen, 1, device = device) # position : m  ,size (T,)
 
-    # angles : m * w_i outer product
+    # angles : m * w_i outer product -> (T, d/2)
     angles = torch.outer(positions, freqs)
 
     cos = torch.cos(angles)
     sin = torch.sin(angles)
 
+    # 显式对齐到 (B, T, H, D/2)
+    cos_q = reshape_for_broadcast(cos, query_real)
+    sin_q = reshape_for_broadcast(sin, query_real)
+    cos_k = reshape_for_broadcast(cos, key_real)
+    sin_k = reshape_for_broadcast(sin, key_real)
+
     # real' = real * cos - imag * sin
     # imag' = real * sin + imag * cos
-    query_real_rot = query_real * cos - query_imag * sin
-    query_imag_rot = query_real * sin + query_imag * cos
+    query_real_rot = query_real * cos_q - query_imag * sin_q
+    query_imag_rot = query_real * sin_q + query_imag * cos_q
 
-    key_real_rot = key_real * cos - key_real * sin
-    key_imag_rot = key_real * sin + key_imag * cos
+    key_real_rot = key_real * cos_k - key_imag * sin_k
+    key_imag_rot = key_real * sin_k + key_imag * cos_k
 
     query_out = torch.stack([query_real_rot, query_imag_rot], dim=-1).reshape(query.shape)
     key_out = torch.stack([key_real_rot, key_imag_rot], dim=-1).reshape(key.shape)
     
-    query_out = None
-    key_out = None
     # Return the rotary position embeddings for the query and key tensors
     return query_out, key_out
