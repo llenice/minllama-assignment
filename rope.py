@@ -53,7 +53,7 @@ def apply_rotary_emb(
     # todo
     #
     # Please refer to slide 22 in https://phontron.com/class/anlp2024/assets/slides/anlp-05-transformers.pdf
-    # and Section 3 in https://arxiv.org/abs/2104.09864.
+    # and Section 3 in https://arxiv. org/abs/2104.09864.
 
     # reshape xq and xk to match the complex representation
     query_real, query_imag = query.float().reshape(query.shape[:-1] + (-1, 2)).unbind(-1)
@@ -67,8 +67,30 @@ def apply_rotary_emb(
     # Then, combine these trigonometric values with the tensors query_real, query_imag,
     # key_real, and key_imag.
 
-    
+    # 计算频率参数: ω_i = θ^(-2(i-1)/d)
+    dim_indices = torch.arange(0, head_dim, 2, device=device) / head_dim
+    freqs = 1.0 / (theta ** dim_indices)
 
+    # 生成位置索引: 0, 1, ..., seqlen-1
+    positions = torch.arange(0, seqlen, 1, device = device) # position : m
+
+    # angles : m * w_i outer product
+    angles = torch.outer(positions, freqs)
+
+    cos = torch.cos(angles)
+    sin = torch.sin(angles)
+
+    # real' = real * cos - imag * sin
+    # imag' = real * sin + imag * cos
+    query_real_rot = query_real * cos - query_imag * sin
+    query_imag_rot = query_real * sin + query_imag * cos
+
+    key_real_rot = key_real * cos - key_real * sin
+    key_imag_rot = key_real * sin + key_imag * cos
+
+    query_out = torch.stack([query_real_rot, query_imag_rot], dim=-1).reshape(query.shape)
+    key_out = torch.stack([key_real_rot, key_imag_rot], dim=-1).reshape(key.shape)
+    
     query_out = None
     key_out = None
     # Return the rotary position embeddings for the query and key tensors
